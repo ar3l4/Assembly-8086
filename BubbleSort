@@ -1,0 +1,292 @@
+data segment
+    niz dw 30 dup(?)    ;max velicina niza je 30, vrednosti su inicijalno 0
+    duzinaNiza dw 0         ;na pocetku duzina niza je 0 dok ne unesemo vrednost, i duzinaNiza preuzme unetu vrednost sa tastature
+            
+    strElementNiza db '                                           '       ;prazan string za unos elementa broja
+    elementNiza dw 0                                                      ;elementNiza, na pocetku je 0
+                         
+    poruka1 db 'Unesite pozitivan broj koji nije veci od 30: $'
+    poruka2 db 'Unesite elementa niza: $'
+    
+    poruka3 db 'Niz pre sortiranja: $'
+    poruka4 db 'Niz posle sortiranja: $'   
+   
+    temp dw ?          ;trenutna vrednost elementa niza, na pocetku je nedefinisan, kasnije uzima vrednost
+    i dw ?             ;za iteraciju kroz niz
+          
+    poruka5 db 'Pritisnite neki taster...$'
+ends
+; Deficija stek segmenta
+stek segment stack
+    dw 128 dup(0)
+ends
+; Ucitavanje znaka bez prikaza i cuvanja     
+keypress macro
+    push ax
+    mov ah, 08
+    int 21h
+    pop ax
+endm
+; Isis stringa na ekran
+writeString macro s
+    push ax
+    push dx  
+    mov dx, offset s
+    mov ah, 09
+    int 21h
+    pop dx
+    pop ax
+endm
+; Kraj programa           
+krajPrograma macro
+    mov ax, 4c02h
+    int 21h
+endm
+
+code segment
+; Novi red
+novired proc
+    push ax
+    push bx
+    push cx
+    push dx
+    mov ah,03
+    mov bh,0
+    int 10h
+    inc dh
+    mov dl,0
+    mov ah,02
+    int 10h
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+novired endp
+; Ucitavanje stringa sa tastature
+; Adresa stringa je parametar na steku
+readString proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    mov bp, sp
+    mov dx, [bp+12]
+    mov bx, dx
+    mov ax, [bp+14]
+    mov byte [bx] ,al
+    mov ah, 0Ah
+    int 21h
+    mov si, dx     
+    mov cl, [si+1] 
+    mov ch, 0
+kopiraj:
+    mov al, [si+2]
+    mov [si], al
+    inc si
+    loop kopiraj     
+    mov [si], '$'
+    pop si  
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret 4
+readString endp
+; Konvertuje string u broj
+strtoint proc
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    mov bp, sp
+    mov bx, [bp+14]
+    mov ax, 0
+    mov cx, 0
+    mov si, 10
+petlja1:
+    mov cl, [bx]
+    cmp cl, '$'
+    je kraj1
+    mul si
+    sub cx, 48
+    add ax, cx
+    inc bx  
+    jmp petlja1
+kraj1:
+    mov bx, [bp+12] 
+    mov [bx], ax 
+    pop si  
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret 4
+strtoint endp
+; Konvertuje broj u string
+inttostr proc
+   push ax
+   push bx
+   push cx
+   push dx
+   push si
+   mov bp, sp
+   mov ax, [bp+14] 
+   mov dl, '$'
+   push dx
+   mov si, 10
+petlja2:
+   mov dx, 0
+   div si
+   add dx, 48
+   push dx
+   cmp ax, 0
+   jne petlja2
+   
+   mov bx, [bp+12]
+petlja2a:      
+   pop dx
+   mov [bx], dl
+   inc bx
+   cmp dl, '$'
+   jne petlja2a
+   pop si  
+   pop dx
+   pop cx            ;skidamo sa steka
+   pop bx
+   pop ax 
+   ret 4
+inttostr endp    
+
+ispisiNiz proc   ;procedura za ispis niza
+    mov ax, @DATA   ;ax uzima vrednosti podataka
+    mov ds, ax      ;set ds = ax
+   
+    lea si, niz ;set SI as offset address of array niz
+    mov bx, duzinaNiza   ;broj elementa
+    mov cx, bx  ;CX is used as a loop counter
+
+        petlja:
+            mov dx, [si]   ;set dx = [si]
+            add dx, 30h  ;convert digit to char and store in DX 
+
+            ;stampa karakter koji se cuva u dx 
+            mov ah, 2h        ; set ah = 2h
+            INT 21h           ; interrupt handler 0x21 
+
+            ;Store in DX the ASCII code for 'space' character 
+            mov dx, 20h
+            ;Print ' ' = space 
+            int 21h         ; interrupt handler 0x21 
+
+            add si, 2 ;povecavamo vrednost si za 2, jer je u pitanju niz tipa dw, SI = SI + 2
+
+        LOOP petlja ; jump to label petlja sve dok je cx razlicito od nule  
+ispisiNiz endp
+
+bubbleSort proc near
+           mov ax,1      ; setujemo ax = 1
+           mov i,ax      ; serujemo i = 1, i koristimo za prikazivanje vrednost na poziciji i, u ovom slucaju niz[1]
+           spoljna_petlja:
+                  lea si,niz            ;poredi si i niz
+                  mov dx,duzinaNiza     ;posto radimo samo sa registrima, dx mora uzeti vrednost duzinaNiza da bi mogli da nastavimo da radimo
+                  for1: mov ax,[si]     ;set ax = [si]
+                        add si,2        ;si= si+2
+                        mov bx,[si]     ;poredi ax i bx
+                        cmp ax,bx
+                        jg for3         ;jump greater
+
+                        for2: mov temp,ax
+                              mov ax,bx              ;ax uzima brednost bx (tmp=ax)
+                              mov bx,temp
+                              mov [si],bx
+                              sub si,2               ;dw(vrsta niza) pa zato si+2
+                              mov [si],ax
+                              add si,2
+
+                        for3: dec dx            ;smanjuje dx
+                              cmp dx,i          ;poredi dx & i
+                              jne for1          ;jmp if not equal
+          
+          inc i          ; i=i+1, inkrementacija za 1
+          mov cx,i                                            ;postavljamo cx kao vrednost duzina niza
+          cmp cx,duzinaNiza          ;poredimo cx i duzinu niza
+          jne spoljna_petlja    ;jump not equal 
+          
+          ret                    ;return
+          
+bubbleSort endp       ;zavrstak procedure
+   
+;pocinjemo sa radom
+    
+start:
+    ; postavljanje segmentnih registara       
+    ASSUME cs: code, ss:stek
+    mov ax, data
+    mov ds, ax     
+    
+ponovo: 
+    writeString poruka1          ;ispisujemo poruka
+    push 3                     
+    push offset strElementNiza     
+    call readString                  ;citamo string
+    call novired              
+    
+    push offset strElementNiza     
+    push offset duzinaNiza             
+    call strtoint                ;pozivamo proceduru za pretvaranje stringa u int
+ 
+    mov ax,duzinaNiza           ;set ax=duzina niza
+    cmp ax,30
+    JG ponovo ; ukoliko je velicina veca od 30, ponovo ubaci broj 
+    
+    mov ax,duzinaNiza
+    cmp ax,1     ;ako je ax = 1, ponovo unosimo  
+    jb ponovo ;  jump below condition
+   
+    mov cx, duzinaNiza      ; cx uzima vrednost duzine niza
+    lea si, niz             ; lea = load eff adress
+                       
+popunjavanjeNiza:
+    writeString poruka2           ;ispisuje poruku 2
+    push 6             
+    push offset strElementNiza    ;cuvamo adresu trenutnog elementa niza koji unosimo
+    call readString               ;citamo string
+    call novired         
+    
+    push offset strElementNiza     
+    push offset elementNiza
+    call strtoint            
+    
+    mov ax, elementNiza            ;set ax = elementNiza                             
+    mov [si], ax                 ;si = ax
+    add si, 2                     ;si povecavamo za 2
+    loop popunjavanjeNiza        ;while popunjavanje niza
+           
+    writeString poruka3       
+    call novired                
+    push offset niz         
+    push duzinaNiza
+    call ispisiNiz      ;pozivamo proceduru za ispis niza         
+    push offset niz
+    push duzinaNiza      ;saljemo adresu duzine niza
+    call bubbleSort      ;pozivamo proceduru za bubble sort
+    call novired  
+    writeString poruka4    
+    push offset niz
+    push duzinaNiza 
+    call novired        ;pozivamo ispis praznog reda
+    call ispisiNiz      ;pozivamo proceduru za ispisivanje niza
+    
+    call novired        ;pozivamo ispis praznog reda
+    
+krajPrograma:
+      
+    writeString poruka5 ;ispisuje se poruka za prekidanje stanja 
+    keyPress            ;prekida se program pri pritiskanju nekog tastera; definisano u proceduri prekid          
+    krajPrograma        ;labela krajPrograma
+    
+ends
+end start
